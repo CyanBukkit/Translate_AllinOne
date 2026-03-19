@@ -4,6 +4,7 @@ import com.cedarxuesong.translate_allinone.Translate_AllinOne;
 import com.cedarxuesong.translate_allinone.utils.llmapi.LLMApiException;
 import com.cedarxuesong.translate_allinone.utils.llmapi.ProviderSettings;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -12,9 +13,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,12 +28,15 @@ import java.util.stream.Stream;
  */
 public class OpenClawClient {
 
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
+    private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(3);
     private final HttpClient httpClient;
     private final ProviderSettings.OpenClawSettings settings;
 
     public OpenClawClient(ProviderSettings.OpenClawSettings settings) {
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(REQUEST_TIMEOUT)
+                .build();
         this.settings = settings;
     }
 
@@ -83,6 +89,7 @@ public class OpenClawClient {
                 .uri(URI.create(endpoint))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + settings.apiKey())
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
@@ -142,6 +149,7 @@ public class OpenClawClient {
                 .uri(URI.create(endpoint))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + settings.apiKey())
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 

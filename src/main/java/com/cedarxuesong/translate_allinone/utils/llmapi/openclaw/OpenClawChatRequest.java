@@ -1,5 +1,7 @@
 package com.cedarxuesong.translate_allinone.utils.llmapi.openclaw;
 
+import com.google.gson.annotations.SerializedName;
+
 import java.util.List;
 
 /**
@@ -11,7 +13,11 @@ public class OpenClawChatRequest {
     private String model;
     private List<Message> messages;
     private Double temperature;
+
+    @SerializedName("stream")
     private Boolean stream;
+
+    @SerializedName("format")
     private String format;
 
     public OpenClawChatRequest() {
