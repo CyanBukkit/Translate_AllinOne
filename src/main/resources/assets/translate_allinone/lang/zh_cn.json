@@ -286,6 +286,7 @@
   "text.translate_allinone.configscreen.provider_type.openai_compat": "OpenAI",
   "text.translate_allinone.configscreen.provider_type.openai_response": "OpenAI-Response",
   "text.translate_allinone.configscreen.provider_type.ollama": "Ollama",
+  "text.translate_allinone.configscreen.provider_type.openclaw": "本地小龙虾 OpenClaw",
   "text.translate_allinone.configscreen.provider_view.routing": "路由",
   "text.translate_allinone.configscreen.provider_view.details": "详情",
   "text.translate_allinone.configscreen.route.item": "物品",

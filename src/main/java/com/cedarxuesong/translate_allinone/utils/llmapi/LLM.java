@@ -2,12 +2,14 @@ package com.cedarxuesong.translate_allinone.utils.llmapi;
 
 import com.cedarxuesong.translate_allinone.Translate_AllinOne;
 import com.cedarxuesong.translate_allinone.utils.config.pojos.ApiProviderType;
-import com.cedarxuesong.translate_allinone.utils.llmapi.ollama.OllamaChatRequest;
-import com.cedarxuesong.translate_allinone.utils.llmapi.ollama.OllamaClient;
 import com.cedarxuesong.translate_allinone.utils.llmapi.openai.OpenAIChatCompletion;
 import com.cedarxuesong.translate_allinone.utils.llmapi.openai.OpenAIClient;
 import com.cedarxuesong.translate_allinone.utils.llmapi.openai.OpenAIRequest;
 import com.cedarxuesong.translate_allinone.utils.llmapi.openai.OpenAIResponsesRequest;
+import com.cedarxuesong.translate_allinone.utils.llmapi.ollama.OllamaChatRequest;
+import com.cedarxuesong.translate_allinone.utils.llmapi.ollama.OllamaClient;
+import com.cedarxuesong.translate_allinone.utils.llmapi.openclaw.OpenClawChatRequest;
+import com.cedarxuesong.translate_allinone.utils.llmapi.openclaw.OpenClawClient;
 
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +21,7 @@ public class LLM {
 
     private final OpenAIClient openAIClient;
     private final OllamaClient ollamaClient;
+    private final OpenClawClient openClawClient;
     private final ProviderSettings settings;
 
     public LLM(ProviderSettings settings) {
@@ -26,12 +29,19 @@ public class LLM {
         if (settings.openAISettings() != null) {
             this.openAIClient = new OpenAIClient(settings.openAISettings());
             this.ollamaClient = null;
+            this.openClawClient = null;
         } else if (settings.ollamaSettings() != null) {
             this.ollamaClient = new OllamaClient(settings.ollamaSettings());
             this.openAIClient = null;
+            this.openClawClient = null;
+        } else if (settings.openClawSettings() != null) {
+            this.openClawClient = new OpenClawClient(settings.openClawSettings());
+            this.openAIClient = null;
+            this.ollamaClient = null;
         } else {
             this.openAIClient = null;
             this.ollamaClient = null;
+            this.openClawClient = null;
             throw new IllegalStateException("LLM服务提供商未配置或配置不正确。");
         }
     }
@@ -79,6 +89,20 @@ public class LLM {
             CompletionSupplier primary = () -> withInternalPostprocessRetry(primaryCall, "Ollama");
             CompletionSupplier fallback = () -> withInternalPostprocessRetry(fallbackCall, "Ollama");
             return withStructuredOutputFallback(structuredOutputEnabled, primary, fallback, "Ollama");
+        }
+
+        // OpenClaw 远程 API 支持
+        if (openClawClient != null) {
+            boolean structuredOutputEnabled = settings.openClawSettings().enableStructuredOutputIfAvailable();
+            CompletionSupplier primaryCall = () -> openClawClient.getChatCompletion(
+                    buildOpenClawRequest(messages, false, structuredOutputEnabled)
+            );
+            CompletionSupplier fallbackCall = () -> openClawClient.getChatCompletion(
+                    buildOpenClawRequest(messages, false, false)
+            );
+            CompletionSupplier primary = () -> withInternalPostprocessRetry(primaryCall, "OpenClaw");
+            CompletionSupplier fallback = () -> withInternalPostprocessRetry(fallbackCall, "OpenClaw");
+            return withStructuredOutputFallback(structuredOutputEnabled, primary, fallback, "OpenClaw");
         }
 
         return CompletableFuture.failedFuture(new IllegalStateException("当前供应商不支持聊天消息补全接口。"));
@@ -152,11 +176,30 @@ public class LLM {
             }
         }
 
+        // OpenClaw 远程 API 流式支持
+        if (openClawClient != null) {
+            boolean structuredOutputEnabled = settings.openClawSettings().enableStructuredOutputIfAvailable();
+            try {
+                return openClawClient.getStreamingChatCompletion(
+                                buildOpenClawRequest(messages, true, structuredOutputEnabled)
+                        );
+            } catch (RuntimeException e) {
+                Throwable rootCause = unwrapCompletionThrowable(e);
+                if (structuredOutputEnabled && isStructuredOutputUnsupported(rootCause)) {
+                    Translate_AllinOne.LOGGER.warn("OpenClaw structured output unsupported in streaming mode, retrying without it: {}", rootCause.getMessage());
+                    return openClawClient.getStreamingChatCompletion(
+                                    buildOpenClawRequest(messages, true, false)
+                            );
+                }
+                throw e;
+            }
+        }
+
         throw new IllegalStateException("当前供应商不支持流式聊天补全接口。");
     }
 
     public boolean supportsChatCompletion() {
-        return openAIClient != null || ollamaClient != null;
+        return openAIClient != null || ollamaClient != null || openClawClient != null;
     }
 
     private OpenAIRequest buildOpenAIRequest(List<OpenAIRequest.Message> messages, boolean stream, boolean structuredOutputEnabled) {
@@ -199,6 +242,51 @@ public class LLM {
                 settings.ollamaSettings().options(),
                 format
         );
+    }
+
+    /**
+     * 构建 OpenClaw 远程 API 请求。
+     * @param messages 消息列表
+     * @param stream 是否流式请求
+     * @param structuredOutputEnabled 是否启用结构化输出
+     * @return OpenClawChatRequest 请求对象
+     */
+    private OpenClawChatRequest buildOpenClawRequest(List<OpenAIRequest.Message> messages, boolean stream, boolean structuredOutputEnabled) {
+        String format = structuredOutputEnabled ? "json_object" : null;
+        
+        // 将 OpenAI 格式的消息转换为 OpenClaw 格式
+        List<OpenClawChatRequest.Message> openClawMessages = messages.stream()
+                .map(msg -> new OpenClawChatRequest.Message(msg.role, msg.content))
+                .toList();
+        
+        // 获取实际模型 ID（处理 provider 前缀，如 minimax-portal/MiniMax-M2.5 -> MiniMax-M2.5）
+        String modelId = settings.openClawSettings().modelId();
+        String actualModelId = resolveOpenClawModelId(modelId);
+        
+        OpenClawChatRequest request = new OpenClawChatRequest(
+                actualModelId,
+                openClawMessages,
+                settings.openClawSettings().temperature(),
+                stream
+        );
+        request.setFormat(format);
+        
+        return request;
+    }
+    
+    /**
+     * 处理 OpenClaw 模型 ID，移除 provider 前缀。
+     * 例如: minimax-portal/MiniMax-M2.5 -> MiniMax-M2.5
+     */
+    private String resolveOpenClawModelId(String modelId) {
+        if (modelId == null || modelId.isBlank()) {
+            return "MiniMax-M2.5";
+        }
+        int slashIndex = modelId.indexOf('/');
+        if (slashIndex > 0 && slashIndex < modelId.length() - 1) {
+            return modelId.substring(slashIndex + 1);
+        }
+        return modelId;
     }
 
     private CompletableFuture<String> withStructuredOutputFallback(

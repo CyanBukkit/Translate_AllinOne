@@ -12,19 +12,23 @@ import java.util.Map;
  * 一个用于封装不同翻译提供商API设置的记录。
  * 这是一个不可变的数据结构。
  */
-public record ProviderSettings(OpenAISettings openAISettings, OllamaSettings ollamaSettings) {
+public record ProviderSettings(OpenAISettings openAISettings, OllamaSettings ollamaSettings, OpenClawSettings openClawSettings) {
 
     public static ProviderSettings fromOpenAI(OpenAISettings settings) {
-        return new ProviderSettings(settings, null);
+        return new ProviderSettings(settings, null, null);
     }
 
     public static ProviderSettings fromOllama(OllamaSettings settings) {
-        return new ProviderSettings(null, settings);
+        return new ProviderSettings(null, settings, null);
+    }
+
+    public static ProviderSettings fromOpenClaw(OpenClawSettings settings) {
+        return new ProviderSettings(null, null, settings);
     }
 
     public static ProviderSettings fromProviderProfile(ApiProviderProfile profile) {
         if (profile == null) {
-            return new ProviderSettings(null, null);
+            return new ProviderSettings(null, null, null);
         }
 
         ApiProviderProfile.ModelSettings activeModelSettings = profile.getActiveModelSettings();
@@ -42,6 +46,19 @@ public record ProviderSettings(OpenAISettings openAISettings, OllamaSettings oll
         }
         if (keepAlive == null || keepAlive.isBlank()) {
             keepAlive = "1m";
+        }
+
+        // 处理 OpenClaw 远程 API 类型
+        if (providerType == ApiProviderType.OPENCLAW) {
+            OpenClawSettings openClawSettings = new OpenClawSettings(
+                    profile.base_url,
+                    profile.api_key,
+                    modelId,
+                    temperature,
+                    structuredOutput,
+                    parameters
+            );
+            return fromOpenClaw(openClawSettings);
         }
 
         if (providerType == ApiProviderType.OLLAMA) {
@@ -175,6 +192,39 @@ public record ProviderSettings(OpenAISettings openAISettings, OllamaSettings oll
          */
         public OllamaSettings(String baseUrl, String modelId) {
             this(baseUrl, modelId, "5m", false, null);
+        }
+    }
+
+    /**
+     * OpenClaw 远程 API 的相关设置。
+     * 通过 WebSocket Gateway 连接到远程 OpenClaw 设备进行翻译请求。
+     * @param gatewayUrl 远程 Gateway 的 WebSocket 地址 (例如 "wss://xxx.ts.net")
+     * @param apiKey 认证密钥 (Gateway Token)
+     * @param modelId 使用的模型ID
+     * @param temperature 模型温度
+     * @param enableStructuredOutputIfAvailable 是否启用结构化输出（如果可用）
+     * @param customParameters 可选的自定义参数，会被添加到请求体中
+     */
+    public static record OpenClawSettings(
+            String gatewayUrl,
+            String apiKey,
+            String modelId,
+            double temperature,
+            boolean enableStructuredOutputIfAvailable,
+            Map<String, Object> customParameters
+    ) {
+        /**
+         * 一个不含结构化输出开关的便捷构造函数（默认关闭）。
+         */
+        public OpenClawSettings(String gatewayUrl, String apiKey, String modelId, double temperature, Map<String, Object> customParameters) {
+            this(gatewayUrl, apiKey, modelId, temperature, false, customParameters);
+        }
+
+        /**
+         * 一个不含自定义参数的便捷构造函数。
+         */
+        public OpenClawSettings(String gatewayUrl, String apiKey, String modelId, double temperature) {
+            this(gatewayUrl, apiKey, modelId, temperature, false, null);
         }
     }
 }

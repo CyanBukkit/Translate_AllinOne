@@ -15,13 +15,16 @@ public final class ProviderEditorSupport {
             case OPENAI_COMPAT -> "OpenAI";
             case OPENAI_RESPONSE -> "OpenAI-Response";
             case OLLAMA -> "Ollama";
+            case OPENCLAW -> "本地小龙虾 OpenClaw";
         };
     }
 
     public static ApiProviderProfile createProfileByType(ApiProviderType type) {
-        ApiProviderProfile profile = type == ApiProviderType.OLLAMA
-                ? ApiProviderProfile.createOllamaDefault()
-                : ApiProviderProfile.createOpenAiDefault();
+        ApiProviderProfile profile = switch (type) {
+            case OLLAMA -> ApiProviderProfile.createOllamaDefault();
+            case OPENCLAW -> ApiProviderProfile.createOpenClawDefault();
+            default -> ApiProviderProfile.createOpenAiDefault();
+        };
         profile.type = type;
         applyProviderTypeDefaults(profile);
         return profile;
@@ -52,6 +55,7 @@ public final class ProviderEditorSupport {
             case OLLAMA -> "/api/chat";
             case OPENAI_RESPONSE -> "/responses";
             case OPENAI_COMPAT -> "/chat/completions";
+            case OPENCLAW -> "/v1/chat/completions";
         };
         return baseUrl.isEmpty() ? endpoint : baseUrl + endpoint;
     }
@@ -73,6 +77,14 @@ public final class ProviderEditorSupport {
             }
             if (profile.model_id == null || profile.model_id.isBlank()) {
                 profile.model_id = "qwen3:0.6b";
+            }
+        } else if (profile.type == ApiProviderType.OPENCLAW) {
+            // OpenClaw 使用远程 Gateway URL (支持 wss:// 或 https:// 格式)
+            if (profile.base_url == null || profile.base_url.isBlank()) {
+                profile.base_url = "wss://your-gateway-url.ts.net";
+            }
+            if (profile.model_id == null || profile.model_id.isBlank()) {
+                profile.model_id = "minimax-portal/MiniMax-M2.5";
             }
         } else {
             if (profile.base_url == null || profile.base_url.isBlank()) {

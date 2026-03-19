@@ -290,6 +290,7 @@
   "text.translate_allinone.configscreen.provider_type.openai_compat": "OpenAI",
   "text.translate_allinone.configscreen.provider_type.openai_response": "OpenAI-Response",
   "text.translate_allinone.configscreen.provider_type.ollama": "OLLAMA",
+  "text.translate_allinone.configscreen.provider_type.openclaw": "OpenClaw",
   "text.translate_allinone.configscreen.provider_view.routing": "Routing",
   "text.translate_allinone.configscreen.provider_view.details": "Details",
   "text.translate_allinone.configscreen.route.item": "ITEM",

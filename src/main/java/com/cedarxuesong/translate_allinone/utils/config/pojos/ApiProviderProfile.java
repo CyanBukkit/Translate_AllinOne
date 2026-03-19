@@ -50,6 +50,28 @@ public class ApiProviderProfile {
         return profile;
     }
 
+    /**
+     * 创建 OpenClaw 默认供应商配置。
+     * OpenClaw 通过 Gateway 连接到远程设备进行翻译请求。
+     * @return 包含默认 OpenClaw 配置的 ApiProviderProfile
+     */
+    public static ApiProviderProfile createOpenClawDefault() {
+        ApiProviderProfile profile = new ApiProviderProfile();
+        profile.id = "openclaw_default";
+        profile.name = "本地小龙虾 OpenClaw";
+        profile.type = ApiProviderType.OPENCLAW;
+        // OpenClaw Gateway 地址 (支持 wss:// 或 https:// 格式)
+        // 例如: wss://your-gateway-url.ts.net 或 https://your-gateway-url.ts.net
+        profile.base_url = "wss://your-gateway-url.ts.net";
+        // API Key 用于 Gateway 认证 (填写你的 Gateway Token)
+        profile.api_key = "";
+        // OpenClaw 支持的模型列表
+        profile.model_id = "minimax-portal/MiniMax-M2.5";
+        profile.model_ids = new ArrayList<>(List.of("minimax-portal/MiniMax-M2.5"));
+        profile.model_settings = new ArrayList<>(List.of(ModelSettings.openClawDefault("minimax-portal/MiniMax-M2.5")));
+        return profile;
+    }
+
     public List<ModelSettings> ensureModelSettings() {
         Map<String, ModelSettings> normalized = new LinkedHashMap<>();
 
@@ -235,6 +257,21 @@ public class ApiProviderProfile {
             ModelSettings settings = new ModelSettings();
             settings.model_id = modelId;
             settings.keep_alive_time = "1m";
+            return settings;
+        }
+
+        /**
+         * 创建 OpenClaw 默认模型设置。
+         * @param modelId 使用的模型 ID
+         * @return 包含默认配置的 ModelSettings
+         */
+        public static ModelSettings openClawDefault(String modelId) {
+            ModelSettings settings = new ModelSettings();
+            settings.model_id = modelId;
+            settings.keep_alive_time = "1m";
+            // OpenClaw 通常支持 system message
+            settings.supports_system_message = true;
+            settings.inject_system_prompt_into_user_message = true;
             return settings;
         }
     }
